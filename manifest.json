@@ -1,0 +1,13 @@
+{
+  "name": "Cronómetro acelerado ×20",
+  "short_name": "Cronómetro ×20",
+  "description": "3 segundos reales equivalen a 1 minuto.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "icons": [
+    {"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
+}

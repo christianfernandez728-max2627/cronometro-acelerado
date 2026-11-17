@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<meta name="description" content="Cronómetro acelerado: 3 segundos reales equivalen a 1 minuto.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Cronómetro ×20</title>
+<style>
+:root{color-scheme:dark;--bg:#101827;--panel:#1b293d;--muted:#a9b7ca;--accent:#3478f6}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;display:grid;place-items:center;padding:22px}
+main{width:min(100%,460px)}h1{text-align:center;font-size:1.35rem;margin:0 0 22px}.panel{background:var(--panel);border:1px solid #34445c;border-radius:24px;padding:28px 16px;text-align:center}
+.kicker{color:var(--muted);font-size:.8rem;letter-spacing:.12em}.time{font-size:clamp(3rem,15vw,5rem);font-weight:700;letter-spacing:-.06em;font-variant-numeric:tabular-nums;margin:12px 0}.rate{color:var(--muted);font-size:.95rem}
+.buttons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin:16px 0}.buttons button{border:0;border-radius:14px;padding:15px 5px;font-size:.95rem;font-weight:700;background:#26364e;color:white}.buttons .primary{background:var(--accent)}
+.sub{background:var(--panel);border-radius:16px;padding:15px;text-align:center;margin-top:12px}.sub small{display:block;color:var(--muted);margin-bottom:5px}.real{font-size:1.35rem;font-variant-numeric:tabular-nums}.status{text-align:center;color:var(--muted);font-size:.9rem;margin:16px 0 0}.hint{text-align:center;color:var(--muted);font-size:.8rem;line-height:1.5;margin-top:18px}
+button:focus-visible{outline:3px solid #9cc0ff;outline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+<h1>⏱️ Cronómetro acelerado</h1>
+<section class="panel" aria-label="Cronómetro">
+<div class="kicker">TIEMPO ACELERADO</div>
+<div class="time" id="time" aria-live="off">00:00:00</div>
+<div class="rate">Velocidad ×20 · 3 segundos reales = 1 minuto</div>
+</section>
+<div class="buttons">
+<button class="primary" id="start">▶ Iniciar</button>
+<button id="pause">Ⅱ Pausar</button>
+<button id="reset">↻ Reiniciar</button>
+</div>
+<section class="sub">
+<small>Tiempo real transcurrido</small>
+<div class="real" id="real">00:00:00</div>
+</section>
+<p class="status" id="status" aria-live="polite">Listo para comenzar</p>
+<p class="hint">El cronómetro calcula el tiempo transcurrido aunque cambies de aplicación o bloquees la pantalla.</p>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const KEY = 'cronometro-x20-state';
+  let elapsed = 0, startedAt = null, running = false, interval = null, wakeLock = null;
+  const fmt = seconds => {
+    seconds = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
+    return [h,m,s].map(n => String(n).padStart(2,'0')).join(':');
+  };
+  const realElapsed = () => elapsed + (running ? (Date.now() - startedAt) / 1000 : 0);
+  function save() {
+    localStorage.setItem(KEY, JSON.stringify({elapsed:realElapsed(), running, savedAt:Date.now()}));
+  }
+  function render() {
+    const r = realElapsed();
+    $('time').textContent = fmt(r * 20);
+    $('real').textContent = fmt(r);
+  }
+  function tick(){render();save();}
+  async function keepAwake(){
+    try { if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+  }
+  function releaseAwake(){ if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null;} }
+  function start(){
+    if(running)return;
+    running=true;startedAt=Date.now();$('status').textContent='Cronómetro en marcha';
+    keepAwake();clearInterval(interval);interval=setInterval(tick,200);tick();
+  }
+  function pause(){
+    if(!running)return;
+    elapsed=realElapsed();running=false;startedAt=null;clearInterval(interval);interval=null;releaseAwake();
+    $('status').textContent='En pausa';render();save();
+  }
+  function reset(){
+    running=false;elapsed=0;startedAt=null;clearInterval(interval);interval=null;releaseAwake();
+    $('status').textContent='Listo para comenzar';render();save();
+  }
+  $('start').addEventListener('click',start);
+  $('pause').addEventListener('click',pause);
+  $('reset').addEventListener('click',reset);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&running)keepAwake();});
+  try {
+    const saved=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(saved){
+      elapsed=Number(saved.elapsed)||0;running=!!saved.running;
+      if(running){
+        // Continue counting from the saved wall-clock time, including time spent away.
+        elapsed += Math.max(0,(Date.now()-(Number(saved.savedAt)||Date.now()))/1000);
+        startedAt=Date.now();$('status').textContent='Cronómetro en marcha';
+        interval=setInterval(tick,200);
+      }
+    }
+  } catch(e) {}
+  render();
+  if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+})();
+</script>
+</body>
+</html>
